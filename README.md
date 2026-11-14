@@ -1,29 +1,24 @@
-<p align="left">
-  <a href="https://hyperellipse.vercel.app">
-    <img src="https://hyperellipse.vercel.app/hyperellipse_logo.svg" alt="hyperellipse" height="48">
-  </a>
-</p>
-
 # hyperellipse
 
-**Docs:** [hyperellipse.vercel.app](https://hyperellipse.vercel.app)
+Transparent polyfill for the CSS [`corner-shape`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/corner-shape) property (squircles, superellipses, scoops, notches). Native rendering in browsers that support `corner-shape`, a high-fidelity JS fallback everywhere else (Safari, Firefox).
 
-[![npm version](https://img.shields.io/npm/v/hyperellipse.svg)](https://www.npmjs.com/package/hyperellipse)
-[![CI](https://github.com/mikhailmogilnikov/hyperellipse/actions/workflows/ci.yml/badge.svg)](https://github.com/mikhailmogilnikov/hyperellipse/actions/workflows/ci.yml)
-[![skills.sh](https://skills.sh/b/mikhailmogilnikov/hyperellipse)](https://skills.sh/mikhailmogilnikov/hyperellipse)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+The fallback geometry follows the exact superellipse math from the [css-borders-4 spec](https://drafts.csswg.org/css-borders/#corner-shaping), so corners look the same in Chrome and in the fallback.
 
-**A transparent polyfill for CSS [`corner-shape`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/corner-shape)** — squircles, superellipses, scoops, notches, and per-corner mixes.
+## Usage
 
-Native rendering where the browser already supports `corner-shape`. A spec-accurate JS fallback everywhere else (Safari, Firefox).
+Write a `--corner-shape` custom property next to your `border-radius` (unknown native properties are discarded by parsers in non-supporting browsers, so the custom property is the carrier):
 
 ```css
 .card {
   --corner-shape: squircle;
-  border-radius: calc(24px * var(--corner-scale, 1));
-  background: #4f46e5;
+  border-radius: 45px;
+  background: red;
+  border: 1px solid black;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
 }
 ```
+
+Register once on the client:
 
 ```ts
 import { registerHyperellipse } from "hyperellipse";
@@ -31,83 +26,24 @@ import { registerHyperellipse } from "hyperellipse";
 registerHyperellipse();
 ```
 
-## Features
+That's it. For SSR apps, also see [Zero-flash SSR fallback](#zero-flash-ssr-fallback-recommended) below.
 
-- **Progressive** — supporting browsers get a tiny zero-specificity CSS bridge; no observers, no layout work in JS
-- **Spec-aligned geometry** — superellipse math from [CSS Borders 4](https://drafts.csswg.org/css-borders/#corner-shaping), so Chrome and the fallback match
-- **Real-world CSS** — backgrounds, gradients, borders, `box-shadow`, `outline` + `outline-offset`
-- **SSR-friendly** — optional `--corner-scale` snippet removes the flash of overly round corners before hydration
-- **Tiny API** — one `registerHyperellipse()` call; idempotent and SSR-safe
+- **Browsers with native `corner-shape`** get a tiny CSS bridge (`corner-shape: var(--corner-shape, round)` at zero specificity) — rendering is fully native, no JS observers run.
+- **Browsers without it** get the fallback: stylesheets are scanned for selectors declaring `--corner-shape`, and matching elements are rendered with `clip-path` / SVG layers / `drop-shadow` filters.
 
-## Installation
-
-```bash
-npm install hyperellipse
-# bun add hyperellipse
-# pnpm add hyperellipse
-```
-
-## Quick start
-
-**1. Style elements with a custom property carrier**
-
-Browsers without `corner-shape` drop the native property at parse time. `--corner-shape` survives in the CSSOM and drives both native and fallback paths:
+You can also write the native property alongside for zero-JS rendering in Chrome:
 
 ```css
-.button {
-  --corner-shape: squircle;
-  border-radius: 45px;
-  background: #2563eb;
-}
-```
-
-You can also set the native property for zero-JS Chrome:
-
-```css
-.button {
+.card {
   corner-shape: squircle;
   --corner-shape: squircle;
   border-radius: 45px;
 }
 ```
 
-**2. Register once on the client**
+### Supported values
 
-```ts
-import { registerHyperellipse } from "hyperellipse";
-
-registerHyperellipse();
-```
-
-**3. (Recommended) Add the SSR radius snippet**
-
-Squircles look less round than circles at the same radius. Scale `border-radius` down in unsupported browsers so the first paint already feels right:
-
-```css
-/* global.css */
-@supports not (corner-shape: squircle) {
-  :root {
-    --corner-scale: 0.6;
-  }
-}
-```
-
-```css
-.button {
-  --corner-shape: squircle;
-  border-radius: calc(45px * var(--corner-scale, 1));
-}
-```
-
-Or import the bundled snippet:
-
-```css
-@import "hyperellipse/css";
-```
-
-## Supported values
-
-Same shorthand grammar as native `corner-shape` (1–4 values):
+Same grammar as the native shorthand, 1–4 values (top-left, top-right, bottom-right, bottom-left):
 
 ```css
 --corner-shape: squircle;
@@ -117,83 +53,95 @@ Same shorthand grammar as native `corner-shape` (1–4 values):
 
 Keywords: `round`, `squircle`, `square`, `bevel`, `scoop`, `notch`, `superellipse(K)`.
 
-Per-element without a stylesheet rule:
+### Per-element opt-in
+
+Without a stylesheet rule you can mark elements directly:
 
 ```html
 <div data-corner-shape="squircle" style="border-radius: 32px"></div>
+<!-- or -->
+<div style="--corner-shape: squircle; border-radius: 32px"></div>
 ```
 
 ## API
 
 ```ts
 const controller = registerHyperellipse({
-  selector: ".card",           // extra selectors (cross-origin sheets)
-  pendingRadiusScale: 0.6,     // pre-hydration radius scale when JS runs
-  force: false,                // force fallback in supporting browsers
+  // Extra selectors (escape hatch for cross-origin stylesheets that can't be scanned)
+  selector: ".card, .button",
+  // border-radius multiplier shown before the fallback applies (see below). Default 0.6
+  pendingRadiusScale: 0.6,
+  // Force the fallback even with native support (debugging / visual comparison)
+  force: false,
 });
 
-controller.supported; // native corner-shape?
-controller.active;    // fallback engine running?
-controller.refresh(); // rescan + recompute
-controller.destroy(); // tear down
+controller.supported; // native corner-shape support
+controller.active;    // JS fallback engine is running
+controller.refresh(); // rescan stylesheets, recompute everything
+controller.destroy(); // stop and remove all applied styles
 ```
 
-Full API notes, rendering strategies, limitations, and performance details live in [`packages/hyperellipse/README.md`](./packages/hyperellipse/README.md).
+Calling `registerHyperellipse()` repeatedly returns the same controller. SSR-safe (no-op without `document`).
 
-## How it works
+## Zero-flash SSR fallback (recommended)
 
-| Environment | What happens |
+A squircle visually rounds less than a circle at the same radius, so SSR pages in Safari/Firefox briefly show "too round" corners until the JS bundle loads. JS can't fix that gap — pure CSS can. Write your radius through the `--corner-scale` multiplier:
+
+```css
+.card {
+  --corner-shape: squircle;
+  border-radius: calc(45px * var(--corner-scale, 1));
+}
+```
+
+And add this global snippet (or `@import "hyperellipse/css"`):
+
+```css
+@supports not (corner-shape: squircle) {
+  :root {
+    --corner-scale: 0.6;
+  }
+}
+```
+
+How it behaves:
+
+- **Native browsers**: `--corner-scale` is unset → factor `1` → full radius, native squircle. Zero flash.
+- **Fallback browsers, before JS**: the `@supports not` block activates at first paint → corners render at ×0.6 radius, closely matching the perceived roundness of the future squircle. No layout shift, no JS timing involved.
+- **Fallback browsers, after init**: during each read phase the engine temporarily forces `--corner-scale: 1` so squircle geometry is computed from the **full** radius — identical to Chrome.
+- **Runtime shape off**: when `--corner-shape` is removed, the engine sets inline `--corner-scale: 1` so round mode matches Chrome at full radius (not ×0.6 from the SSR snippet).
+
+`0.6` is the perceptual equivalence factor between a circle and a `squircle` (matching corner cut areas). Tune it globally or per element by overriding `--corner-scale` inside the `@supports not` block (e.g. `0.5` for `superellipse(3+)`, `0.7` for softer shapes).
+
+For design systems that apply `var(--corner-scale)` to round tokens globally, co-locate `--corner-scale: 0.6` in the same rule as `--corner-shape` instead of relying on `:root` alone.
+
+### Automatic pending reduction (secondary)
+
+If you write plain `border-radius` without the multiplier, the library still injects a stylesheet at registration time that scales matched radii down (`pendingRadiusScale`, default ×0.6) until per-element styles apply. This only kicks in once JS runs, so it covers late-mounted/CSR content but not the SSR-to-bundle gap — prefer the CSS snippet above. Radii already written via `var(--corner-scale)` are excluded from it automatically.
+
+## How the fallback renders
+
+| Element styles | Strategy |
 | --- | --- |
-| Chrome / native `corner-shape` | Injects `corner-shape: var(--corner-shape, round)` via `@property` bridge |
-| Safari / Firefox | Scans stylesheets for `--corner-shape`, renders with `clip-path` / SVG layers |
-| SSR | `--corner-scale` CSS snippet softens corners before JS loads |
+| background (color, gradients, images), content clipping | `clip-path: path(...)` on the element |
+| `border` (uniform, solid) | SVG ring as the top background layer, native border made transparent (layout preserved) |
+| `box-shadow` (outer, with real `spread`) | Gaussian-blurred shape baked into a static SVG on a `::before` pseudo-element |
+| `outline` + `outline-offset` | SVG ring on an `::after` pseudo-element |
 
-## Agent skill
+When `box-shadow` or `outline` are present the element switches to "layer mode" (no `clip-path`, the background/border/shadows are painted by a single SVG layer on `::before` with `z-index: -1`) because `clip-path` clips pseudo-elements and filter output. Shadows are deliberately **not** rendered with `filter: drop-shadow()` — Safari clips and lags live filters (especially on zoom); a pre-rendered SVG with `feGaussianBlur` is static, vector and composited like any background image.
 
-An [Agent Skill](https://www.skills.sh/docs) ships with this repo so coding agents integrate hyperellipse correctly (SSR snippet, API, limitations). Works with any agent on [skills.sh](https://skills.sh/) — Cursor, Claude Code, Codex, GitHub Copilot, Windsurf, and others.
+## Limitations
 
-```bash
-npx skills add mikhailmogilnikov/hyperellipse@hyperellipse -y
-```
+- **`inset` shadows** are dropped (outer shadows, including `spread`, are exact).
+- **Dashed/dotted/per-side borders** render as a uniform solid ring.
+- **`box-shadow`/`outline` + background images/gradients**: in layer mode the background image is not shaped (corners stick out). Solid colors are fully supported.
+- Layer mode sets `isolation: isolate` (a stacking context) to contain the `z-index: -1` pseudo-layer, and uses the element's `::before`/`::after` — they must be free.
+- In layer mode child content is not clipped to the shape (`overflow: hidden` clips to the rect).
+- **`:hover` and `:focus`** work in the fallback. The engine re-reads computed styles on pointer enter/leave and focus events on the element and its ancestors — parent `:hover` rules (e.g. `.wrap:hover .block`) are covered too. Call `refresh()` for imperative updates outside CSS.
+- `--corner-shape` is registered with `inherits: false` (matching the native property) — set it on the element itself, not an ancestor.
+- **`border-radius`, `box-shadow`, and `outline` transitions** are not interpolated frame-by-frame — the shape updates on state change, at `transitionrun`, and at `transitionend`. `opacity` and `transform` always transition natively. `background-color` transitions smoothly on solid fills only (no shadow or outline); in layer mode the fill is baked into SVG and jumps. Size (`width` / `height`) transitions animate smoothly via `ResizeObserver`.
+- Animating `corner-shape`, `border-radius`, `box-shadow`, or `outline` in keyframes is not tracked frame-by-frame in the fallback — only size (`width` / `height`) animates smoothly.
 
-Source: [`skills/hyperellipse/SKILL.md`](./skills/hyperellipse/SKILL.md)
+## Performance
 
-## Documentation site
-
-**[hyperellipse.vercel.app](https://hyperellipse.vercel.app)**
-
-```bash
-cd apps/docs
-bun install
-bun run dev
-bun run build
-bun run preview
-```
-
-## Development
-
-Monorepo managed with [Bun workspaces](https://bun.sh/docs/install/workspaces) and [Turborepo](https://turbo.build/).
-
-```bash
-bun install
-bun run build          # build all packages
-bun run dev            # docs + package watch
-bun run check          # lint / format (ultracite)
-bun run check-types    # typecheck
-```
-
-### Releases
-
-[Changesets](https://github.com/changesets/changesets) locally. Only `hyperellipse` is versioned and published to npm:
-
-```bash
-bun changeset          # describe your change
-bun version-packages   # bump versions + changelog
-bun release            # build + publish to npm
-```
-
-Commits follow [Conventional Commits](https://www.conventionalcommits.org/). See [CONTRIBUTING.md](./CONTRIBUTING.md).
-
-## License
-
-[MIT](./LICENSE) © [Mikhail Mogilnikov](https://github.com/mikhailmogilnikov)
+One shared `ResizeObserver` + `MutationObserver` for all instances, batched read/write phases per animation frame, keyed caching (no DOM writes unless output changed), size-only updates skip computed-style re-reads entirely. A shared `IntersectionObserver` defers work for off-screen elements until they enter the viewport.
