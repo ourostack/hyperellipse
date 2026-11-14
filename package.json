@@ -1,38 +1,19 @@
 {
-  "devDependencies": {
-    "@biomejs/biome": "2.4.16",
-    "@changesets/cli": "^2.31.0",
-    "@commitlint/cli": "^21.0.2",
-    "@commitlint/config-conventional": "^21.0.2",
-    "lefthook": "^2.1.9",
-    "turbo": "^2.9.18",
-    "typescript": "^6",
-    "ultracite": "7.8.3"
-  },
-  "name": "hyperellipse-repo",
-  "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "format": "ultracite fix",
-    "check-types": "turbo run check-types",
-    "test": "turbo run test",
-    "check": "ultracite check",
-    "commitlint": "commitlint --from HEAD~1 --to HEAD --verbose",
-    "fix": "ultracite fix",
-    "prepare": "lefthook install",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "bun run build && changeset publish"
-  },
-  "workspaces": [
-    "apps/*",
-    "packages/*",
-    "configs/*"
-  ],
+  "name": "hyperellipse",
+  "version": "1.0.5",
+  "description": "CSS corner-shape fallback (squircles and superellipses) for browsers without native support, trimmed for Ouro UI",
+  "type": "module",
+  "license": "MIT",
   "private": true,
-  "engines": {
-    "node": ">=18"
+  "repository": { "type": "git", "url": "https://github.com/ourostack/hyperellipse.git" },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
   },
-  "packageManager": "bun@1.3.14"
+  "devDependencies": {
+    "@vitest/browser-playwright": "^4.1.8",
+    "playwright": "^1.59.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.8"
+  }
 }
